@@ -1,204 +1,117 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>Google Sheets to Tableau - Dynamic Schema WDC</title>
-  <script src="https://tableau.github.io/webdataconnector/assets/tableauwdc-2.3.latest.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 40px; background:#f5f5f5 }
-    .container { max-width:600px; margin:0 auto; background:white; padding:30px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,.1) }
-    button{ padding:12px 24px; font-size:16px; background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;width:100% }
-    .info{background:#e7f3ff;padding:12px;border-radius:4px;margin:12px 0}
-    input{ width:100%; padding:8px; margin:8px 0;border:1px solid #ccc;border-radius:4px }
-  </style>
+<title>Google Sheets to Tableau Connector</title>
+<script src="https://connectors.tableau.com/libs/tableauwdc-2.3.latest.js"></script>
+<style>
+body {
+font-family: Arial, sans-serif;
+margin: 40px;
+background-color: #f5f5f5;
+}
+.container {
+max-width: 600px;
+margin: 0 auto;
+background: white;
+padding: 30px;
+border-radius: 8px;
+box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+h1 {
+color: #333;
+text-align: center;
+}
+button {
+padding: 12px 24px;
+font-size: 16px;
+margin: 20px 0;
+background-color: #4CAF50;
+color: white;
+border: none;
+border-radius: 4px;
+cursor: pointer;
+display: block;
+width: 100%;
+}
+button:hover {
+background-color: #45a049;
+}
+.info {
+background-color: #e7f3ff;
+padding: 15px;
+border-radius: 4px;
+margin: 20px 0;
+}
+</style>
 </head>
 <body>
-  <div class="container">
-    <h1>Google Sheets Connector (auto-schema)</h1>
+<div class="container">
+<h1>Google Sheets Connector</h1>
 
-    <div class="info">
-      <strong>Example Sheet ID:</strong> 1yUBaWm-sS_MyFmtUzZw7nXAZo89LFGzI<br>
-      <strong>Example Sheet Name:</strong> bottle_refill
-    </div>
+<div class="info">
+<strong>Sheet ID:</strong> 1yUBaWm-sS_MyFmtUzZw7nXAZo89LFGzI<br>
+<strong>Sheet Name:</strong> bottle_refill
+</div>
 
-    <label>Google Sheet ID</label>
-    <input id="sheetIdInput" placeholder="Enter sheet ID (between /d/ and /edit)" value="1yUBaWm-sS_MyFmtUzZw7nXAZo89LFGzI" />
+<p>Click the button below to connect Tableau to your Google Sheet data:</p>
 
-    <label>Sheet Name (tab name) or leave blank to use first sheet</label>
-    <input id="sheetNameInput" placeholder="bottle_refill" value="bottle_refill" />
+<button id="submitButton">Connect to Google Sheets Data</button>
 
-    <button id="submitButton">Connect to Google Sheets Data</button>
-
-    <p style="font-size:12px;margin-top:12px">Make sure your Google Sheet is shared: <em>Anyone with the link → Viewer</em>.</p>
-  </div>
+<p><small>This connector fetches data directly from your public Google Sheet without requiring authentication.</small></p>
+</div>
 
 <script>
 (function() {
-  // Tableau WDC object
-  const myConnector = tableau.makeConnector();
+// Create the connector object
+const myConnector = tableau.makeConnector();
 
-  // Utility: sanitize header into safe column id
-  function sanitizeHeader(h) {
-    return h ? h.replace(/\s+/g, '_').replace(/[^\w_]/g, '').substring(0, 128) : 'Column';
-  }
+// Init function - called when connector is initialized
+myConnector.init = function(initCallback) {
+tableau.connectionName = "Google Sheets - bottle_refill";
+initCallback();
+};
 
-  // Simple type inference: checks sample values for number or date, otherwise string
-  function inferType(values) {
-    let nCount = 0, dCount = 0, total = 0;
-    for (const v of values) {
-      if (v === null || v === undefined || String(v).trim() === '') continue;
-      total++;
-      const s = String(v).trim();
-      // numeric?
-      const num = Number(s.replace(/,/g,'')); // allow thousands commas
-      if (!Number.isNaN(num) && isFinite(num)) { nCount++; continue; }
-      // basic ISO date check (YYYY-... or common patterns)
-      const date = Date.parse(s);
-      if (!Number.isNaN(date)) { dCount++; continue; }
-    }
-    if (total === 0) return tableau.dataTypeEnum.string;
-    if (nCount / total > 0.7) return tableau.dataTypeEnum.float;
-    if (dCount / total > 0.7) return tableau.dataTypeEnum.datetime;
-    return tableau.dataTypeEnum.string;
-  }
+// Schema function - Tableau will auto-detect schema from CSV
+myConnector.getSchema = function(schemaCallback) {
+schemaCallback([]);
+};
 
-  // Initialize
-  myConnector.init = function(initCallback) {
-    tableau.connectionName = "Google Sheets - dynamic";
-    initCallback();
-  };
+// Data function - fetches and processes the data
+myConnector.getData = function(table, doneCallback) {
+const sheetId = "1yUBaWm-sS_MyFmtUzZw7nXAZo89LFGzI";
+const sheetName = "bottle_refill";
+const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${sheetName}`;
 
-  // getSchema: fetch CSV, build schema from header & sample rows, then call schemaCallback
-  myConnector.getSchema = function(schemaCallback) {
-    const sheetId = document.getElementById('sheetIdInput').value.trim();
-    const sheetName = document.getElementById('sheetNameInput').value.trim();
-    if (!sheetId) {
-      tableau.abortWithError("Sheet ID is required.");
-      return;
-    }
+console.log("Fetching data from:", csvUrl);
 
-    // Use export CSV URL (works better for CORS)
-    // If sheetName is empty, we use export without sheet param (first sheet).
-    const csvUrl = sheetName
-      ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&sheet=${encodeURIComponent(sheetName)}`
-      : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+fetch(csvUrl)
+.then(response => {
+if (!response.ok) {
+throw new Error(`HTTP error! status: ${response.status}`);
+}
+return response.text();
+})
+.then(csvData => {
+console.log("CSV data received, converting...");
+const tableData = tableau.csvToObjects(csvData);
+console.log(`Converted ${tableData.length} rows`);
+table.appendRows(tableData);
+doneCallback();
+})
+.catch(error => {
+console.error('Error fetching data:', error);
+tableau.abortWithError("Failed to fetch data from Google Sheets. Make sure your sheet is public and accessible.");
+});
+};
 
-    fetch(csvUrl)
-      .then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status} - ${response.statusText}`);
-        return response.text();
-      })
-      .then(csvText => {
-        // Parse CSV using a simple split (tableau.csvToObjects would be used later in getData)
-        const lines = csvText.split(/\r\n|\n/).filter(l => l !== undefined && l !== null);
-        if (lines.length === 0) throw new Error('CSV appears empty.');
+// Register the connector
+tableau.registerConnector(myConnector);
 
-        // Use first non-empty line as header
-        const headerLine = lines[0];
-        // split CSV header safely (simple split on comma works for many sheets; for quoted commas we fallback to tableau.csvToObjects in getData)
-        // We'll try a basic CSV split for building column ids:
-        const rawHeaders = headerLine.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(h => h.replace(/^"|"$/g,'').trim());
-
-        // Sample first N rows for type inference
-        const sampleRows = [];
-        for (let i = 1; i < Math.min(11, lines.length); i++) {
-          const row = lines[i].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c => c.replace(/^"|"$/g,''));
-          sampleRows.push(row);
-        }
-
-        // Build columns array
-        const columns = rawHeaders.map((h, idx) => {
-          // collect sample values for this column
-          const samples = sampleRows.map(r => (r[idx] !== undefined ? r[idx] : ''));
-          const dtype = inferType(samples);
-          return {
-            id: sanitizeHeader(h) || `Column${idx+1}`,
-            alias: h || `Column${idx+1}`,
-            dataType: dtype
-          };
-        });
-
-        // If no headers (single column), create a default column
-        if (columns.length === 0) {
-          columns.push({ id: 'Column1', alias: 'Column1', dataType: tableau.dataTypeEnum.string });
-        }
-
-        const tableSchema = {
-          id: "googleSheetData",
-          alias: "Google Sheet Data (auto)",
-          columns: columns
-        };
-
-        // Save mapping into tableau.connectionData for getData (stringify)
-        tableau.connectionData = JSON.stringify({ csvUrl, headers: rawHeaders, sanitized: columns.map(c => c.id) });
-
-        schemaCallback([tableSchema]);
-      })
-      .catch(err => {
-        console.error('getSchema error:', err);
-        tableau.abortWithError("Failed to fetch sheet for schema generation. Check Sheet ID, Sheet Name, and that the sheet is public.");
-      });
-  };
-
-  // getData: fetch CSV and append rows, mapping headers to sanitized column ids
-  myConnector.getData = function(table, doneCallback) {
-    let connectionData = {};
-    try {
-      connectionData = tableau.connectionData ? JSON.parse(tableau.connectionData) : {};
-    } catch (e) {
-      connectionData = {};
-    }
-
-    const sheetId = document.getElementById('sheetIdInput').value.trim();
-    const sheetName = document.getElementById('sheetNameInput').value.trim();
-    const csvUrl = connectionData.csvUrl || (sheetName
-      ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&sheet=${encodeURIComponent(sheetName)}`
-      : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`);
-
-    fetch(csvUrl)
-      .then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.text();
-      })
-      .then(csvText => {
-        // Use tableau.csvToObjects which correctly handles quoted fields and headers
-        const rows = tableau.csvToObjects(csvText);
-
-        // If we created sanitized ids earlier, transform objects so keys match schema column ids
-        if (connectionData.headers && connectionData.sanitized) {
-          const headerMap = {};
-          for (let i = 0; i < connectionData.headers.length; i++) {
-            headerMap[connectionData.headers[i]] = connectionData.sanitized[i] || sanitizeHeader(connectionData.headers[i]);
-          }
-          const transformed = rows.map(r => {
-            const obj = {};
-            for (const origHeader in r) {
-              const targetKey = headerMap[origHeader] || sanitizeHeader(origHeader);
-              obj[targetKey] = r[origHeader];
-            }
-            return obj;
-          });
-          table.appendRows(transformed);
-        } else {
-          // fallback - append as-is
-          table.appendRows(rows);
-        }
-        doneCallback();
-      })
-      .catch(err => {
-        console.error('getData error:', err);
-        tableau.abortWithError("Failed to fetch data. Ensure the sheet is public and the URL is correct.");
-      });
-  };
-
-  tableau.registerConnector(myConnector);
-
-  // Button handler - submit to Tableau
-  document.getElementById('submitButton').addEventListener('click', function() {
-    tableau.connectionName = "Google Sheets - dynamic";
-    tableau.submit();
-  });
-
+// Setup button click handler
+document.getElementById("submitButton").addEventListener("click", function() {
+tableau.connectionName = "Google Sheets - bottle_refill";
+tableau.submit();
+});
 })();
 </script>
 </body>
