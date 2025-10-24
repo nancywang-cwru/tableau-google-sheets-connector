@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Google Sheets to Tableau Connector</title>
+<script src="https://connectors.tableau.com/libs/tableauwdc-2.3.latest.js"></script>
+<style>
+body {
+font-family: Arial, sans-serif;
+margin: 40px;
+background-color: #f5f5f5;
+}
+.container {
+max-width: 600px;
+margin: 0 auto;
+background: white;
+padding: 30px;
+border-radius: 8px;
+box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+h1 {
+color: #333;
+text-align: center;
+}
+button {
+padding: 12px 24px;
+font-size: 16px;
+margin: 20px 0;
+background-color: #4CAF50;
+color: white;
+border: none;
+border-radius: 4px;
+cursor: pointer;
+display: block;
+width: 100%;
+}
+button:hover {
+background-color: #45a049;
+}
+.info {
+background-color: #e7f3ff;
+padding: 15px;
+border-radius: 4px;
+margin: 20px 0;
+}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Google Sheets Connector</h1>
+
+<div class="info">
+<strong>Sheet ID:</strong> 1yUBaWm-sS_MyFmtUzZw7nXAZo89LFGzI<br>
+<strong>Sheet Name:</strong> bottle_refill
+</div>
+
+<p>Click the button below to connect Tableau to your Google Sheet data:</p>
+
+<button id="submitButton">Connect to Google Sheets Data</button>
+
+<p><small>This connector fetches data directly from your public Google Sheet without requiring authentication.</small></p>
+</div>
+
+<script>
+(function() {
+// Create the connector object
+const myConnector = tableau.makeConnector();
+
+// Init function - called when connector is initialized
+myConnector.init = function(initCallback) {
+tableau.connectionName = "Google Sheets - bottle_refill";
+initCallback();
+};
+
+// Schema function - Tableau will auto-detect schema from CSV
+myConnector.getSchema = function(schemaCallback) {
+schemaCallback([]);
+};
+
+// Data function - fetches and processes the data
+myConnector.getData = function(table, doneCallback) {
+const sheetId = "1yUBaWm-sS_MyFmtUzZw7nXAZo89LFGzI";
+const sheetName = "bottle_refill";
+const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${sheetName}`;
+
+console.log("Fetching data from:", csvUrl);
+
+fetch(csvUrl)
+.then(response => {
+if (!response.ok) {
+throw new Error(`HTTP error! status: ${response.status}`);
+}
+return response.text();
+})
+.then(csvData => {
+console.log("CSV data received, converting...");
+const tableData = tableau.csvToObjects(csvData);
+console.log(`Converted ${tableData.length} rows`);
+table.appendRows(tableData);
+doneCallback();
+})
+.catch(error => {
+console.error('Error fetching data:', error);
+tableau.abortWithError("Failed to fetch data from Google Sheets. Make sure your sheet is public and accessible.");
+});
+};
+
+// Register the connector
+tableau.registerConnector(myConnector);
+
+// Setup button click handler
+document.getElementById("submitButton").addEventListener("click", function() {
+tableau.connectionName = "Google Sheets - bottle_refill";
+tableau.submit();
+});
+})();
+</script>
+</body>
+</html>
