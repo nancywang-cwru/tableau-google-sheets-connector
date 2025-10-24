@@ -62,57 +62,71 @@ margin: 20px 0;
 
 <script>
 (function() {
-// Create the connector object
-const myConnector = tableau.makeConnector();
+  // Create the connector object
+  const myConnector = tableau.makeConnector();
 
-// Init function - called when connector is initialized
-myConnector.init = function(initCallback) {
-tableau.connectionName = "Google Sheets - bottle_refill";
-initCallback();
-};
+  // Init function
+  myConnector.init = function(initCallback) {
+    tableau.connectionName = "Google Sheets - bottle_refill";
+    initCallback();
+  };
 
-// Schema function - Tableau will auto-detect schema from CSV
-myConnector.getSchema = function(schemaCallback) {
-schemaCallback([]);
-};
+  // Schema function - define schema manually
+  myConnector.getSchema = function(schemaCallback) {
+    // We'll just define a generic schema
+    const cols = [
+      { id: "Column1", alias: "Column1", dataType: tableau.dataTypeEnum.string },
+      { id: "Column2", alias: "Column2", dataType: tableau.dataTypeEnum.string },
+      { id: "Column3", alias: "Column3", dataType: tableau.dataTypeEnum.string }
+      // You can add more if you know your sheet structure
+    ];
 
-// Data function - fetches and processes the data
-myConnector.getData = function(table, doneCallback) {
-const sheetId = "1yUBaWm-sS_MyFmtUzZw7nXAZo89LFGzI";
-const sheetName = "bottle_refill";
-const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${sheetName}`;
+    const tableSchema = {
+      id: "googleSheetData",
+      alias: "Google Sheet Data",
+      columns: cols
+    };
 
-console.log("Fetching data from:", csvUrl);
+    schemaCallback([tableSchema]);
+  };
 
-fetch(csvUrl)
-.then(response => {
-if (!response.ok) {
-throw new Error(`HTTP error! status: ${response.status}`);
-}
-return response.text();
-})
-.then(csvData => {
-console.log("CSV data received, converting...");
-const tableData = tableau.csvToObjects(csvData);
-console.log(`Converted ${tableData.length} rows`);
-table.appendRows(tableData);
-doneCallback();
-})
-.catch(error => {
-console.error('Error fetching data:', error);
-tableau.abortWithError("Failed to fetch data from Google Sheets. Make sure your sheet is public and accessible.");
-});
-};
+  // Data function - fetch CSV data and convert
+  myConnector.getData = function(table, doneCallback) {
+    const sheetId = "1yUBaWm-sS_MyFmtUzZw7nXAZo89LFGzI";
+    const sheetName = "bottle_refill";
+    const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&sheet=${sheetName}`;
 
-// Register the connector
-tableau.registerConnector(myConnector);
+    console.log("Fetching data from:", csvUrl);
 
-// Setup button click handler
-document.getElementById("submitButton").addEventListener("click", function() {
-tableau.connectionName = "Google Sheets - bottle_refill";
-tableau.submit();
-});
+    fetch(csvUrl)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.text();
+      })
+      .then(csvData => {
+        const rows = tableau.csvToObjects(csvData);
+        console.log(`Fetched ${rows.length} rows`);
+        table.appendRows(rows);
+        doneCallback();
+      })
+      .catch(error => {
+        console.error("Error fetching data:", error);
+        tableau.abortWithError("Failed to fetch data from Google Sheets. Make sure the sheet is public.");
+      });
+  };
+
+  // Register the connector
+  tableau.registerConnector(myConnector);
+
+  // Button click handler
+  document.getElementById("submitButton").addEventListener("click", function() {
+    tableau.connectionName = "Google Sheets - bottle_refill";
+    tableau.submit();
+  });
 })();
 </script>
+
 </body>
 </html>
